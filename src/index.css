@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #0a0b12;
+  --color-surface: #171927;
+  --color-surface-2: #1f2234;
+  --color-hair: #232638;
+  --color-soft: #9aa0b8;
+  --color-muted: #7e86a6;
+  --color-live: #4ade80;
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-void);
+  color: #fff;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 0.45s ease-out both;
+  }
+  .rise-2 {
+    animation: rise 0.45s 0.08s ease-out both;
+  }
+  .card-press {
+    transition: transform 0.15s ease;
+  }
+  .card-press:active {
+    transform: scale(0.985);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
