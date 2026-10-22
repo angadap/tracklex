@@ -4,7 +4,7 @@
 //   * Sign-in, PIN reset, organisers, passwords: the `tlx-auth` edge function (supabase/functions/tlx-auth).
 import { useSyncExternalStore } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { SPORT, ok, fail } from "./core.js";
+import { ok, fail } from "./core.js";
 
 const URL = import.meta.env?.VITE_SUPABASE_URL;
 const KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY;
@@ -33,8 +33,7 @@ const writeGuest = (v) => {
 };
 
 const empty = () => ({
-  settings: { season: 2026, ageCutoff: "2026-10-01" },
-  accounts: [], players: [], categories: [], registrations: [], matches: [], entries: [],
+  accounts: [], players: [], tournaments: [], categories: [], stages: [], registrations: [], matches: [], entries: [],
   session: null, guest: false, error: "",
 });
 
@@ -74,9 +73,15 @@ async function fetchAll(build) {
   return rows;
 }
 
-const mapCategory = (r) => ({ id: r.id, sport: r.sport, name: r.name, gender: r.gender, format: r.format, minAge: r.min_age, maxAge: r.max_age, fee: r.fee });
+const mapTournament = (r) => ({
+  id: r.id, sport: r.sport, name: r.name, season: r.season, ageCutoff: r.age_cutoff, startsOn: r.starts_on, endsOn: r.ends_on,
+  regOpen: r.reg_open, createdAt: r.created_at,
+});
+const mapCategory = (r) => ({ id: r.id, tournamentId: r.tournament_id, sport: r.sport, name: r.name, gender: r.gender, format: r.format, minAge: r.min_age, maxAge: r.max_age, fee: r.fee });
+const mapStage = (r) => ({ id: r.id, categoryId: r.category_id, seq: r.seq, name: r.name, kind: r.kind, groups: r.groups, legs: r.legs, advance: r.advance });
 const mapMatch = (r) => ({
-  id: r.id, categoryId: r.category_id, round: r.round, roundLabel: r.round_label, seq: r.seq,
+  id: r.id, categoryId: r.category_id, stageId: r.stage_id, groupNo: r.group_no, scheduledAt: r.scheduled_at,
+  round: r.round, roundLabel: r.round_label, seq: r.seq,
   p1RegId: r.p1_reg_id, p2RegId: r.p2_reg_id, score1: r.score1, score2: r.score2,
   winnerRegId: r.winner_reg_id, status: r.status, bye: r.bye, note: r.note,
 });
@@ -87,8 +92,9 @@ const mapAccount = (r) => ({ id: r.id, name: r.name, mobile: r.mobile, username:
 // Everything the current visitor is allowed to see, as one state patch.
 async function loadAll(uid) {
   const jobs = [
-    sb.from("settings").select("season, age_cutoff").maybeSingle(),
+    fetchAll(() => sb.from("tournaments").select("*").order("created_at").order("id")),
     fetchAll(() => sb.from("categories").select("*").order("created_at").order("id")),
+    fetchAll(() => sb.from("stages").select("*").order("seq").order("id")),
     fetchAll(() => sb.from("matches").select("*").order("round").order("seq").order("id")),
     fetchAll(() => sb.rpc("list_entries").order("id")),
   ];
@@ -99,11 +105,11 @@ async function loadAll(uid) {
       fetchAll(() => sb.from("registrations").select("*").order("created_at").order("id"))
     );
   }
-  const [settings, categories, matches, entries, profiles = [], players = [], regs = []] = await Promise.all(jobs);
-  if (settings.error) throw settings.error;
+  const [tournaments, categories, stages, matches, entries, profiles = [], players = [], regs = []] = await Promise.all(jobs);
   return {
-    settings: settings.data ? { season: settings.data.season, ageCutoff: settings.data.age_cutoff } : state.settings,
+    tournaments: tournaments.map(mapTournament),
     categories: categories.map(mapCategory),
+    stages: stages.map(mapStage),
     matches: matches.map(mapMatch),
     entries: entries.map((e) => ({ id: e.id, categoryId: e.category_id, name: e.name })),
     accounts: profiles.map(mapAccount),
@@ -278,7 +284,20 @@ export const register = ({ playerId, categoryId, partnerName = "" }) =>
 export const withdraw = (regId) => rpc("withdraw_entry", { p_reg_id: regId });
 export const setPaid = (regId, paid) => rpc("set_paid", { p_reg_id: regId, p_paid: !!paid });
 
-// ---------- categories ----------
+// ---------- tournaments ----------
+const withId = (res) => (res.ok ? ok({ id: res.data }) : res);
+
+export async function saveTournament({ id, sport, name, season, ageCutoff, startsOn, endsOn, regOpen }) {
+  const y = Number(season);
+  if (!Number.isInteger(y)) return fail("Enter a valid season year.");
+  return withId(await rpc("save_tournament", {
+    p_id: id || null, p_sport: sport, p_name: name || "", p_season: y, p_age_cutoff: ageCutoff || null,
+    p_starts_on: startsOn || null, p_ends_on: endsOn || null, p_reg_open: regOpen !== false,
+  }));
+}
+export const deleteTournament = (id) => rpc("delete_tournament", { p_id: id });
+
+// ---------- categories (age / gender groups inside a tournament) ----------
 export async function saveCategory(input) {
   const minAge = Number(input.minAge);
   const maxAge = Number(input.maxAge);
@@ -286,23 +305,36 @@ export async function saveCategory(input) {
   if (!Number.isInteger(minAge) || !Number.isInteger(maxAge) || minAge < 0 || maxAge < minAge)
     return fail("Enter a valid age range (minimum cannot be above maximum).");
   if (!Number.isInteger(fee) || fee < 0) return fail("Fee must be a whole number of rupees, 0 or more.");
-  return rpc("save_category", {
-    p_id: input.id || null, p_sport: SPORT, p_name: input.name || "", p_gender: input.gender, p_format: input.format,
+  return withId(await rpc("save_category", {
+    p_id: input.id || null, p_tournament: input.tournamentId, p_name: input.name || "", p_gender: input.gender, p_format: input.format,
     p_min_age: minAge, p_max_age: maxAge, p_fee: fee,
-  });
+  }));
 }
 export const deleteCategory = (id) => rpc("delete_category", { p_id: id });
-export const addStarterCategories = () => rpc("add_starter_categories", { p_sport: SPORT });
+export const addStarterCategories = (tournamentId) => rpc("add_starter_categories", { p_tournament: tournamentId });
 
-export async function saveSettings({ season, ageCutoff }) {
-  const y = Number(season);
-  if (!Number.isInteger(y)) return fail("Enter a valid season year.");
-  return rpc("save_settings", { p_season: y, p_age_cutoff: ageCutoff || null });
+// ---------- stages: the structure of rounds ----------
+export async function saveStage({ id, categoryId, name, kind, groups, legs, advance }) {
+  return withId(await rpc("save_stage", {
+    p_id: id || null, p_category: categoryId, p_name: name || "", p_kind: kind,
+    p_groups: Number(groups ?? 1), p_legs: Number(legs ?? 1), p_advance: Number(advance ?? 0),
+  }));
 }
+export const deleteStage = (id) => rpc("delete_stage", { p_id: id });
+export const moveStage = (id, dir) => rpc("move_stage", { p_id: id, p_dir: dir });
 
 // ---------- matches ----------
-export const generateRound = (categoryId) => rpc("generate_round", { p_category_id: categoryId });
-export const clearDraw = (categoryId) => rpc("clear_draw", { p_category_id: categoryId });
+export const generateStage = (stageId) => rpc("generate_stage", { p_stage: stageId });
+export const clearStage = (stageId) => rpc("clear_stage", { p_stage: stageId });
+export async function saveMatch({ id, stageId, p1RegId, p2RegId, label, round, scheduledAt }) {
+  return withId(await rpc("save_match", {
+    p_id: id || null, p_stage: stageId || null, p_p1: p1RegId || null, p_p2: p2RegId || null,
+    p_label: label || "", p_round: Number(round ?? 1), p_when: scheduledAt || null,
+  }));
+}
+export const deleteMatch = (id) => rpc("delete_match", { p_id: id });
+export const setSchedule = (matchId, when) => rpc("set_schedule", { p_match_id: matchId, p_when: when || null });
+export const clearScore = (matchId) => rpc("clear_score", { p_match_id: matchId });
 export async function saveScore(matchId, { score1, score2, note }) {
   const a = Number(score1);
   const b = Number(score2);

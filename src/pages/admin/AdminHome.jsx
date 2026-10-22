@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, Layers, Users, Swords, Settings2, UserCog, KeyRound } from "lucide-react";
-import { useDb, me, isAdmin, can, presetName, sportName, tableTennisCategories, formatMoney } from "../../lib/db.js";
+import { ChevronRight, Layers, Users, Settings2, UserCog, KeyRound } from "lucide-react";
+import { useDb, me, isAdmin, can, presetName, sportName, sportCategories, formatMoney, currentSeason } from "../../lib/db.js";
 import { TopBar, Page, Card } from "../../components/ui.jsx";
 
 export default function AdminHome() {
@@ -8,7 +8,7 @@ export default function AdminHome() {
   const admin = isAdmin(db);
   const account = me(db);
   const organisers = db.accounts.filter((a) => a.role === "organiser" || (a.role === "player" && a.perms?.length)).length;
-  const cats = tableTennisCategories(db);
+  const cats = sportCategories(db, "table-tennis");
   const feeOf = (r) => cats.find((c) => c.id === r.categoryId)?.fee || 0;
   const regs = db.registrations.filter((r) => cats.some((c) => c.id === r.categoryId));
   const collected = regs.filter((r) => r.paid).reduce((s, r) => s + feeOf(r), 0);
@@ -27,13 +27,14 @@ export default function AdminHome() {
       ]
     : [["Matches played", played]];
   const links = [
-    ...(ok("categories") ? [{ to: "/admin/categories", Icon: Layers, title: "Categories and fees", note: `${cats.length} set up` }] : []),
+    ...(ok("categories") || ok("draws") || ok("scores")
+      ? [{ to: "/admin/tournaments", Icon: Layers, title: "Tournaments", note: `${db.tournaments.length} · ${cats.length} categories` }]
+      : []),
     ...(ok("entries") ? [{ to: "/admin/players", Icon: Users, title: "Players and payments", note: `${regs.length} entries` }] : []),
-    ...(ok("draws") || ok("scores") ? [{ to: "/admin/matches", Icon: Swords, title: "Matches and scores", note: `${played} played` }] : []),
     ...(admin
       ? [
           { to: "/admin/organisers", Icon: UserCog, title: "Organisers", note: organisers ? `${organisers} assigned` : "None yet" },
-          { to: "/admin/settings", Icon: Settings2, title: "Season settings", note: `Season ${db.settings.season}` },
+          { to: "/admin/settings", Icon: Settings2, title: "Data tools", note: "Clear test data" },
         ]
       : []),
     ...(account.username ? [{ to: "/admin/password", Icon: KeyRound, title: "Change password", note: `@${account.username}` }] : []),
@@ -41,7 +42,7 @@ export default function AdminHome() {
 
   return (
     <>
-      <TopBar title={admin ? "Admin" : "Organiser"} sub={admin ? `Table Tennis ${db.settings.season}` : `${sportName(account.sport)} ${db.settings.season} · ${presetName(account.perms)}`} />
+      <TopBar title={admin ? "Admin" : "Organiser"} sub={admin ? `Table Tennis ${currentSeason(db)}` : `${sportName(account.sport)} ${currentSeason(db)} · ${presetName(account.perms)}`} />
       <Page>
         <div className="grid grid-cols-2 gap-3">
           {stats.map(([label, value]) => (

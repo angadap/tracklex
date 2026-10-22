@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDb, isAdmin, adminSavePlayer, adminRemovePlayer, tableTennisCategories, categoryLabel, formatMoney, setPaid, withdraw, resetPin, ageOn } from "../../lib/db.js";
+import { useDb, isAdmin, adminSavePlayer, adminRemovePlayer, sportCategories, categoryFullLabel, ageFor, formatMoney, setPaid, withdraw, resetPin } from "../../lib/db.js";
 import { TopBar, Page, Segmented, Card, Chip, Empty, Btn, Sheet, Field, ErrorText, inputCls } from "../../components/ui.jsx";
 
 export default function Players() {
@@ -13,7 +13,7 @@ export default function Players() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
-  const cats = tableTennisCategories(db);
+  const cats = sportCategories(db, "table-tennis");
   const rows = db.registrations
     .filter((r) => cats.some((c) => c.id === r.categoryId))
     .filter((r) => catId === "all" || r.categoryId === catId)
@@ -46,7 +46,7 @@ export default function Players() {
           {tab === "entries" && (
             <select className={inputCls} value={catId} onChange={(e) => setCatId(e.target.value)} aria-label="Category">
               <option value="all">All categories</option>
-              {cats.map((c) => <option key={c.id} value={c.id}>{categoryLabel(c)}</option>)}
+              {cats.map((c) => <option key={c.id} value={c.id}>{categoryFullLabel(db, c)}</option>)}
             </select>
           )}
         </div>
@@ -63,7 +63,7 @@ export default function Players() {
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-bold">{p.name}{r.partnerName ? ` & ${r.partnerName}` : ""}</p>
-                          <p className="mt-0.5 text-[13px] text-soft">{categoryLabel(c)} · age {ageOn(p.dob, db.settings.ageCutoff)}{p.society ? ` · ${p.society}` : ""}</p>
+                          <p className="mt-0.5 text-[13px] text-soft">{categoryFullLabel(db, c)} · age {ageFor(db, p.dob, c)}{p.society ? ` · ${p.society}` : ""}</p>
                         </div>
                         <Chip tone={r.paid ? "good" : "warn"}>{r.paid ? "Paid" : "Unpaid"}</Chip>
                       </div>

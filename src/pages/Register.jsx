@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Check } from "lucide-react";
-import { useDb, me, isStaffAccount, myPlayers, tableTennisCategories, isEligible, categoryLabel, formatMoney, register, ageOn } from "../lib/db.js";
+import { useDb, me, isStaffAccount, myPlayers, activeTournament, categoriesIn, isEligible, categoryLabel, formatMoney, register, ageOn } from "../lib/db.js";
 import { TopBar, Page, Btn, Card, Empty, Chip, ErrorText, inputCls } from "../components/ui.jsx";
 
 export default function Register() {
@@ -57,8 +57,9 @@ export default function Register() {
   }
 
   const player = players.find((p) => p.id === playerId);
-  const all = tableTennisCategories(db);
-  const eligible = player ? all.filter((c) => isEligible(player, c, db.settings.ageCutoff)) : [];
+  const tour = activeTournament(db, "table-tennis");
+  const all = tour ? categoriesIn(db, tour.id) : [];
+  const eligible = player && tour ? all.filter((c) => isEligible(player, c, tour.ageCutoff)) : [];
   const entered = new Set(db.registrations.filter((r) => r.playerId === playerId).map((r) => r.categoryId));
   const locked = (c) => db.matches.some((m) => m.categoryId === c.id);
   const total = Object.keys(picked).reduce((s, id) => s + (all.find((c) => c.id === id)?.fee || 0), 0);
@@ -109,7 +110,7 @@ export default function Register() {
 
   return (
     <>
-      <TopBar title="Register" back={back} backLabel="Table Tennis" sub={`Table Tennis ${db.settings.season}`} />
+      <TopBar title="Register" back={back} backLabel="Table Tennis" sub={tour ? tour.name : "Table Tennis"} />
       <Page>
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted">Who is playing?</p>
         <div className="flex flex-wrap gap-2">
@@ -127,10 +128,12 @@ export default function Register() {
         {player && (
           <>
             <p className="mb-2 mt-6 text-xs font-bold uppercase tracking-[0.14em] text-muted">
-              Events for {player.name} · age {ageOn(player.dob, db.settings.ageCutoff)}
+              Events for {player.name} · age {ageOn(player.dob, tour?.ageCutoff || new Date().toISOString().slice(0, 10))}
             </p>
             {all.length === 0 ? (
               <Empty title="No categories yet">The organiser has not set up Table Tennis categories.</Empty>
+            ) : !tour.regOpen ? (
+              <Empty title="Entries are closed">{tour.name} is not taking entries right now.</Empty>
             ) : eligible.length === 0 ? (
               <Empty title="No matching events">None of the categories fit this player's age and gender.</Empty>
             ) : (

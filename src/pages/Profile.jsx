@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Pencil, Plus, ShieldCheck, LogOut } from "lucide-react";
-import { useDb, me, isAdmin, isStaff, isStaffAccount, grantOf, presetName, sportName, myPlayers, ageOn, savePlayer, removePlayer, withdraw, signOut, categoryLabel, formatMoney } from "../lib/db.js";
+import { useDb, me, isAdmin, isStaff, isStaffAccount, grantOf, presetName, sportName, myPlayers, ageOn, ageFor, savePlayer, removePlayer, withdraw, signOut, categoryLabel, formatMoney } from "../lib/db.js";
 import { TopBar, Page, Btn, Card, Chip, Empty, SectionTitle, Sheet, Field, ErrorText, inputCls } from "../components/ui.jsx";
 
 const blank = { name: "", dob: "", gender: "", society: "", relation: "self" };
@@ -132,7 +132,7 @@ export default function Profile() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-bold">{p.name}</p>
                         <p className="mt-0.5 text-[13px] text-soft">
-                          {p.relation === "child" ? "Child" : "Me"} · {p.gender === "M" ? "Male" : "Female"} · Age {ageOn(p.dob, db.settings.ageCutoff)}
+                          {p.relation === "child" ? "Child" : "Me"} · {p.gender === "M" ? "Male" : "Female"} · Age {ageFor(db, p.dob)}
                           {p.society ? ` · ${p.society}` : ""}
                         </p>
                       </div>

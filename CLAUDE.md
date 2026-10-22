@@ -44,9 +44,10 @@ Migrations in `supabase/migrations/`, applied in order (`supabase/schema.sql` is
 | `0002_access.sql` | helper functions (`my_role`, `is_admin`, `can_manage`, ...), `list_entries()`, RLS: clients can only READ; write grants revoked | applied |
 | `0004_auth_attempts.sql` | atomic `auth_attempt()` counter, service role only | applied |
 | `0005_permissions.sql` | `profiles.perms`, new shape check (players may carry sport + perms), `can_manage`, `has_perm`, `require_perm`, entries-read policy | columns and functions applied; the constraint and policy change (contains `drop`) **must be pasted in the SQL editor** |
-| `0006_actions.sql` | 14 write functions (SECURITY DEFINER) that check role, permission and rules, e.g. `save_player`, `register_entry`, `generate_round`, `save_score`. Friendly errors are shown verbatim in the app | **NOT applied yet** (tool refuses `delete`; paste in the SQL editor) |
+| `0006_tournaments.sql` | `tournaments`, `stages`; categories belong to a tournament; matches belong to a stage (`group_no`, `scheduled_at`, nullable player 1 for byes); public read RLS; `stage_standings()` | **NOT applied yet** |
+| `0007_actions.sql` | all write functions (SECURITY DEFINER) that check role, permission and rules: players, entries, `save_tournament`, `save_category`, `save_stage`, `generate_stage`, `save_match`, `set_schedule`, `save_score`, `clear_stage` and more. Friendly errors are shown verbatim in the app | **NOT applied yet** (tool refuses `drop`/`delete`; paste in the SQL editor) |
 
-`supabase/APPLY_IN_SQL_EDITOR.sql` = 0005 + 0006 in one paste (safe to re-run).
+`supabase/APPLY_IN_SQL_EDITOR.sql` = 0005 + 0006 + 0007 in one paste (safe to re-run).
 
 - **Writes** go only through those functions; **reads** are plain selects limited by RLS. Public: sports, settings, categories, matches, and `list_entries()` (bracket names only, no dob, mobile or payment). Private: profiles (own or admin), players (own, admin, or organiser of a sport the player is in), registrations (owner or the sport's manager).
 - **Sign-in** is the edge function `tlx-auth` (`supabase/functions/tlx-auth/index.ts`, verify_jwt off). Actions: signup, signin, staff-signin, reset-pin, save-organiser, grant-organiser, delete-organiser (also removes only the organiser access of a promoted player), change-password, reset-all-data, bootstrap-admin. The real Auth password is HMAC-SHA256(pepper, ...); the pepper is in table `app_secrets`, so the PIN is never the Auth password and nobody can guess into Supabase Auth directly. Fake emails: `<mobile>@players.tracklex.invalid`, `<username>@staff.tracklex.invalid`.
@@ -74,8 +75,9 @@ Dark, immersive pro-sports-app look, chosen by Angad from three mockups. History
 tracklex/
 ├── CLAUDE.md
 ├── .env.example                 <- the two env vars for live mode
-├── supabase/migrations/         <- 0001..0006 SQL (see 3a)
+├── supabase/migrations/         <- 0001..0007 SQL (see 3a)
 ├── supabase/functions/tlx-auth/ <- sign-in edge function
+├── tests/                       <- data-layer, SQL (PGlite) and browser tests, see tests/README.md
 ├── index.html, vite.config.js, package.json
 └── src/
     ├── main.jsx                 <- bootstraps router, seeds demo organiser
@@ -86,10 +88,10 @@ tracklex/
     ├── lib/remote.js            <- live Supabase backend
     ├── lib/local.js             <- offline demo backend
     ├── data/sports.js           <- sport list, gradients, ready flag
-    ├── components/              <- BottomNav, SportIcons, MatchRow, ui
+    ├── components/              <- BottomNav, SportIcons, MatchRow, CategoryResults, ui
     └── pages/
         ├── Home.jsx, SportPage.jsx, Register.jsx, Auth.jsx, Profile.jsx, Placeholder.jsx
-        └── admin/ AdminHome, Categories, Players, Matches, Settings (admin), Organisers (admin), Password
+        └── admin/ AdminHome, Tournaments, TournamentPage, CategoryPage, Players, Settings (admin), Organisers (admin), Password
 ```
 
 ## 6. Routes and screens
@@ -104,10 +106,11 @@ tracklex/
 | `/profile` | player | Account, players (add/edit/remove), each player's entries with Paid/Due, withdraw, fees due, sign out |
 | `/profile` | organiser | Name and username, open console, change password, sign out |
 | `/admin` | admin, organiser (incl. promoted players) | Dashboard; tiles shown only for permissions held;: totals and links. Admin also gets Organisers and Season settings. Everyone gets Change password |
-| `/admin/categories` | admin, organiser | Add/edit/delete categories, "Add starter set" (Under 10, 10–17, 18–45, 46–60, Above 60 for men and women singles) |
+| `/admin/tournaments` | admin, organiser (setup perm) | Tournaments of the organiser's sport(s): name, season, age cutoff date, start/end dates, entries open/closed |
+| `/admin/tournaments/:tid` | same | The tournament's categories (add/edit/delete, "Add starter set"), edit or delete the tournament |
+| `/admin/categories/:cid` | admin, organiser | One category: its stages (add from template or custom, edit, reorder, delete), make matches / next round, add match slots (players, round name, number, date and time), enter or clear results, standings, clear stage |
 | `/admin/players` | admin, organiser | Entries (search, filter, mark paid/unpaid, withdraw). Admin only: Accounts tab with reset PIN, edit and remove player profiles. Organiser sees a read-only note |
-| `/admin/matches` | admin, organiser | Per category: random knockout draw, byes for odd counts, enter games-won scores, make next round, champion, clear draw |
-| `/admin/settings` | admin | Season year, age cutoff date, wipe test data (organisers are redirected to `/admin`) |
+| `/admin/settings` | admin | Data tools: wipe test data (season and cutoff now live on each tournament) (organisers are redirected to `/admin`) |
 | `/admin/organisers` | admin | Two ways to add: "From a player" (picks a player account) or "New account" (username + password). Choose a sport and a level (presets or ticks). Edit, or remove (a promoted player stays a player). Username fixed after creation; blank password on edit keeps the old one |
 | `/admin/password` | admin, organiser | Change own password |
 
@@ -117,9 +120,9 @@ Organiser permissions (`perms`), per sport. Admin has all of them in every sport
 
 | Permission | Lets them |
 |---|---|
-| `categories` | add, edit, delete categories and fees, add the starter set |
+| `categories` | create and edit tournaments, categories, fees and stages; add the starter set |
 | `entries` | see entries and payment status (and the players in them), mark paid, withdraw entries |
-| `draws` | make rounds, clear a draw |
+| `draws` | make matches and rounds, add match slots, set dates and times, clear a stage |
 | `scores` | enter match results |
 
 | Action | Admin | Organiser with the permission (own sport) | Player |
@@ -136,10 +139,13 @@ A scorer sees the dashboard, matches and brackets only; entries and fees are hid
 
 ## 7. Rules implemented (in `db.js`)
 
-- Eligibility: player's age on the cutoff date within min–max, and category gender matches (mixed accepts all).
+- Eligibility: player's age on the tournament's cutoff date within min–max, and category gender matches (mixed accepts all).
 - One entry per player per category; doubles needs a partner name; entries close once a category's draw exists.
 - Withdraw blocked once the player is in a match. A category with entries cannot be deleted. A player with entries cannot be removed.
-- Draw: round 1 is a random shuffle; later rounds pair winners in order; labels are Final / Semi-finals / Quarter-finals / Round N. A match cannot end level. Scores cannot be edited after the next round exists (clear the draw instead).
+- Structure: Sport -> Tournament (per sport per event: name, season, age cutoff, dates, entries open/closed) -> Categories (age/gender groups; players are divided by category) -> Stages (ordered per category) -> Match slots (players, score, date and time; no table or referee).
+- Stage kinds: **knockout** (random round 1 with byes, next round from winners; Final / Semi-finals / Quarter-finals / Round N), **round robin** (groups, play once or twice, top N advance), **custom** (slots added by hand). Stages are made from templates and are freely editable. A later stage takes the top `advance` per group of the previous stage (wins, then game difference, games won, then entry id).
+- A match cannot end level. Results lock once a later stage has matches (knockout: once the next round exists); clearing a stage also clears later ones. The champion comes only from the last stage (knockout final, or the table leader of a single group).
+- Entries close when the tournament's entries are closed or a stage has matches; age is counted on the tournament's cutoff date.
 - Permissions follow section 6a (UI hides what is not allowed; the server refuses it anyway). Organiser username: 3 to 20 characters of a-z, 0-9, dot, dash, underscore, unique; password at least 8 characters.
 - Player accounts and staff accounts are separate: player credentials do not work on the staff tab and the reverse. Staff cannot register players; the Register tab is replaced by Admin / Organiser in their nav.
 - After signing in, players return to the page they were trying to open (new registrations go to Profile to add players); organisers go to `/admin`.
@@ -168,7 +174,7 @@ Live sign-in function (2026-10-21, via pg_net): signup and duplicate mobile, pla
 
 ## 11. Next steps
 
-1. Paste `supabase/APPLY_IN_SQL_EDITOR.sql` into the Supabase SQL editor, then test every write function and permission live, run the Supabase advisors
+1. Paste `supabase/APPLY_IN_SQL_EDITOR.sql` (0005 + 0006 + 0007) into the Supabase SQL editor, then test every write function and permission live, test `remote.js` against the live database, run the Supabase advisors. The old `settings` table is now unused.
 2. Push to GitHub, set the two env vars on Cloudflare Pages, deploy, wipe test data
 3. Badminton setup (reuse the Table Tennis screens with a sport parameter)
 4. Basic certificates (participation and winner)
@@ -186,3 +192,4 @@ Live sign-in function (2026-10-21, via pg_net): signup and duplicate mobile, pla
 - **2026-10-19:** Supabase project Tracklex created (empty). No app change.
 - **2026-10-21 — v0.7.0:** Live backend. Supabase tables, row-level security (read-only for clients), write functions with role and rule checks (0003, pending apply), throttled sign-in edge function `tlx-auth`, first admin created. App now has two modes (live via env vars, demo otherwise); data layer split into `core.js`, `local.js`, `remote.js`, all actions async. Added `.env.example`. Demo-mode tests: 46 permission checks and 24 browser checks green. Live end-to-end not yet verified (waiting for 0003).
 - **2026-10-21 — v0.8.0:** Organiser permission levels (categories, entries, draws, scores; presets Full organiser / Registration desk / Scorer) and "make a player an organiser" (player keeps mobile + PIN login and players, gains the console for one sport). New `0005_permissions.sql`, `0006_actions.sql` (was 0003) with `require_perm`; edge function v3 (`grant-organiser`, perms on organiser accounts). Organisers screen rebuilt; dashboard, routes and Matches page respect permissions. Removed 8 unused old files. Demo-mode tests: 46 + 36 permission checks green.
+- **2026-10-22 — v0.9.0:** Tournament structure. Sport -> Tournament -> Categories -> Stages -> Match slots. Admin and organisers with the setup permission create tournaments (season, age cutoff and entries open/closed moved here from season settings), age/gender categories, and stages from templates (knockout, round robin with groups and 1 or 2 legs and N advancing, custom) that can be edited, reordered and chained; match slots hold players, score, round name and date/time. New migrations `0006_tournaments.sql` and `0007_actions.sql` (old 0006_actions replaced; `save_settings`, `generate_round`, `clear_draw` removed). New screens Tournaments, TournamentPage, CategoryPage; removed Categories and Matches screens; public sport page has a tournament picker, stages and tables. Edge function v4 (wipe also clears tournaments). Tests: 166 data-layer rule checks, 95 PGlite database-rule checks, 16 browser checks (390px) green in demo mode; migrations 0005 (part), 0006 and 0007 NOT yet applied live.

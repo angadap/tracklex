@@ -6,15 +6,18 @@ import Register from "./pages/Register.jsx";
 import Auth from "./pages/Auth.jsx";
 import Profile from "./pages/Profile.jsx";
 import AdminHome from "./pages/admin/AdminHome.jsx";
-import Categories from "./pages/admin/Categories.jsx";
+import Tournaments from "./pages/admin/Tournaments.jsx";
+import TournamentPage from "./pages/admin/TournamentPage.jsx";
+import CategoryPage from "./pages/admin/CategoryPage.jsx";
 import Players from "./pages/admin/Players.jsx";
-import Matches from "./pages/admin/Matches.jsx";
 import Settings from "./pages/admin/Settings.jsx";
 import Organisers from "./pages/admin/Organisers.jsx";
 import Password from "./pages/admin/Password.jsx";
 import Placeholder from "./pages/Placeholder.jsx";
 import { useDb, me, isAdmin, isStaff, isStaffAccount, can, canManage } from "./lib/db.js";
 
+// Anyone who runs part of a tournament (setup, draws or scores) can open the tournament screens; each control checks its own permission.
+const SETUP = ["categories", "draws", "scores"];
 const AUTH_PATHS = ["/login", "/signup"];
 
 // The app opens on the sign-in screen. Visitors who choose "Continue without signing in" can browse read-only.
@@ -60,9 +63,10 @@ export default function App() {
           <Route path="/signup" element={<Auth initialMode="register" />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<StaffOnly><AdminHome /></StaffOnly>} />
-          <Route path="/admin/categories" element={<StaffOnly need="categories"><Categories /></StaffOnly>} />
+          <Route path="/admin/tournaments" element={<StaffOnly need={SETUP}><Tournaments /></StaffOnly>} />
+          <Route path="/admin/tournaments/:tid" element={<StaffOnly need={SETUP}><TournamentPage /></StaffOnly>} />
+          <Route path="/admin/categories/:cid" element={<StaffOnly need={SETUP}><CategoryPage /></StaffOnly>} />
           <Route path="/admin/players" element={<StaffOnly need="entries"><Players /></StaffOnly>} />
-          <Route path="/admin/matches" element={<StaffOnly need={["draws", "scores"]}><Matches /></StaffOnly>} />
           <Route path="/admin/settings" element={<StaffOnly adminOnly><Settings /></StaffOnly>} />
           <Route path="/admin/organisers" element={<StaffOnly adminOnly><Organisers /></StaffOnly>} />
           <Route path="/admin/password" element={<StaffOnly accountOnly><Password /></StaffOnly>} />

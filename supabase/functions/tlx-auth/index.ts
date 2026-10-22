@@ -267,10 +267,10 @@ async function changePassword(b: any, me: Profile | null) {
   return okRes();
 }
 
-// Wipes players, entries, categories and matches. Admin and organiser accounts and the season settings stay.
+// Wipes players, entries, tournaments, categories, stages and matches. Admin and organiser accounts and the season settings stay.
 async function resetAllData(me: Profile | null) {
   if (me?.role !== "admin") return fail(NOT_ADMIN);
-  for (const table of ["matches", "registrations", "players", "categories"]) {
+  for (const table of ["matches", "registrations", "players", "categories", "tournaments"]) {   // stages go with their categories
     const { error } = await db.from(table).delete().not("id", "is", null);
     if (error) {
       console.error("wipe failed", table, error.message);

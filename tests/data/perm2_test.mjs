@@ -1,0 +1,71 @@
+const mem = {}; globalThis.localStorage = { getItem:k=>mem[k]??null, setItem:(k,v)=>{mem[k]=String(v)}, removeItem:k=>{delete mem[k]} };
+const db = await import(new URL("../../src/lib/db.js", import.meta.url).href);
+let pass=0, fail=0;
+const t=(name,res,expectOk)=>{ const good=(res.ok===expectOk); good?pass++:fail++; console.log(good?"PASS":"FAIL", name, res.ok?"(allowed)":"("+res.error+")"); };
+const is=(name,v,exp)=>{ const good=v===exp; good?pass++:fail++; console.log(good?"PASS":"FAIL", name, good?"":`got ${v}`); };
+const S=()=>db.getState();
+await db.ensureDemoAdmin();
+let TID=null; const STG=(c)=>db.getState().stages.find(x=>x.categoryId===c)?.id;
+t("admin signs in", await db.staffSignIn({username:"admin",password:"admin123"}), true);
+t("organiser with no permissions refused", await db.saveOrganiser({name:"N",username:"nobody",password:"OrgPass123",sport:"table-tennis",perms:[]}), false);
+t("unknown permission names ignored -> refused", await db.saveOrganiser({name:"N",username:"nobody",password:"OrgPass123",sport:"table-tennis",perms:["fly"]}), false);
+TID=(await db.saveTournament({sport:"table-tennis",name:"Warje Olympics 2026",season:2026,ageCutoff:"2026-10-01"})).id;
+t("scorer created", await db.saveOrganiser({name:"Scorer",username:"scorer1",password:"OrgPass123",sport:"table-tennis",perms:["scores"]}), true);
+t("desk created", await db.saveOrganiser({name:"Desk",username:"desk1",password:"OrgPass123",sport:"table-tennis",perms:["entries"]}), true);
+t("starter categories", await db.addStarterCategories(TID), true);
+const cat=S().categories.find(c=>c.name==="18–45"&&c.gender==="M").id;
+const ids={};
+for (const [n,m] of [["Rahul","9876500001"],["Amit","9876500002"],["Sam","9876500003"]]) {
+  await db.signUp({name:n,mobile:m,pin:"4321"});
+  await db.savePlayer({name:n,dob:"1996-05-10",gender:"M",society:"K",relation:"self"});
+  const pid=S().players.find(p=>p.name===n).id; await db.register({playerId:pid,categoryId:cat});
+  ids[n]=S().accounts.find(a=>a.mobile===m).id; await db.signOut();
+}
+const reg=S().registrations[0].id;
+// ---- scorer
+await db.staffSignIn({username:"scorer1",password:"OrgPass123"});
+is("scorer is staff", db.isStaff(S()), true);
+is("scorer is a staff account", db.isStaffAccount(S()), true);
+t("scorer CANNOT add category", await db.saveCategory({tournamentId:TID,name:"T",gender:"M",format:"singles",minAge:1,maxAge:5,fee:0}), false);
+t("scorer CANNOT mark paid", await db.setPaid(reg,true), false);
+t("scorer CANNOT make a draw", await db.generateStage(STG(cat)), false);
+await db.signOut(); await db.staffSignIn({username:"admin",password:"admin123"});
+t("admin makes the draw", await db.generateStage(STG(cat)), true);
+const m=S().matches.find(x=>x.categoryId===cat&&!x.bye);
+await db.signOut(); await db.staffSignIn({username:"scorer1",password:"OrgPass123"});
+t("scorer CAN enter a score", await db.saveScore(m.id,{score1:2,score2:0}), true);
+t("scorer CANNOT clear the draw", await db.clearStage(STG(cat)), false);
+t("scorer CANNOT grant organiser access", await db.grantOrganiser({accountId:ids.Rahul,sport:"table-tennis",perms:["scores"]}), false);
+await db.signOut();
+// ---- desk
+await db.staffSignIn({username:"desk1",password:"OrgPass123"});
+t("desk CAN mark paid", await db.setPaid(reg,true), true);
+t("desk CANNOT enter a score", await db.saveScore(m.id,{score1:0,score2:2}), false);
+t("desk CANNOT make a draw", await db.generateStage(STG(cat)), false);
+t("desk CANNOT delete a category", await db.deleteCategory(cat), false);
+await db.signOut();
+// ---- player made organiser (categories only)
+await db.staffSignIn({username:"admin",password:"admin123"});
+t("admin CANNOT grant to a staff account", await db.grantOrganiser({accountId:S().accounts.find(a=>a.username==="desk1").id,sport:"table-tennis",perms:["scores"]}), false);
+t("admin grants Rahul 'categories' only", await db.grantOrganiser({accountId:ids.Rahul,sport:"table-tennis",perms:["categories"]}), true);
+await db.signOut();
+t("Rahul signs in with mobile + PIN", await db.signIn({mobile:"9876500001",pin:"4321"}), true);
+is("Rahul is an organiser", db.isOrganiser(S()), true);
+is("Rahul is NOT a staff account (still registers)", db.isStaffAccount(S()), false);
+t("Rahul CAN add a category", await db.saveCategory({tournamentId:TID,name:"Kids",gender:"X",format:"singles",minAge:0,maxAge:8,fee:0}), true);
+t("Rahul CANNOT mark paid", await db.setPaid(reg,true), false);
+t("Rahul CANNOT make a draw", await db.generateStage(STG(cat)), false);
+t("Rahul CAN still edit his own player", await db.savePlayer({id:S().players.find(p=>p.name==="Rahul").id,name:"Rahul P",dob:"1996-05-10",gender:"M",society:"K",relation:"self"}), true);
+t("Rahul CANNOT edit another's profile (admin only)", await db.adminSavePlayer(S().players.find(p=>p.name==="Amit")?.id||"x",{name:"H",dob:"1990-01-01",gender:"M",society:""}), false);
+t("Rahul CANNOT change a staff password (has none)", await db.changeStaffPassword({current:"x",next:"newpassword1"}), false);
+t("Rahul CANNOT grant access", await db.grantOrganiser({accountId:ids.Amit,sport:"table-tennis",perms:["scores"]}), false);
+await db.signOut();
+// ---- admin removes access; account survives
+await db.staffSignIn({username:"admin",password:"admin123"});
+t("admin edits Rahul to scores+entries", await db.grantOrganiser({accountId:ids.Rahul,sport:"table-tennis",perms:["scores","entries"]}), true);
+t("admin removes Rahul's organiser access", await db.deleteOrganiser(ids.Rahul), true);
+const rahul=S().accounts.find(a=>a.id===ids.Rahul);
+is("Rahul still exists as a player", rahul?.role, "player");
+is("Rahul has no permissions left", rahul?.perms.length, 0);
+t("organiser access is gone after removal", await (async()=>{await db.signOut(); await db.signIn({mobile:"9876500001",pin:"4321"}); return db.saveCategory({tournamentId:TID,name:"X",gender:"M",format:"singles",minAge:1,maxAge:5,fee:0});})(), false);
+console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);

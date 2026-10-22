@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, User } from "lucide-react";
 import { SPORTS } from "../data/sports.js";
 import { SPORT_ICONS } from "../components/SportIcons.jsx";
-import { useDb, me } from "../lib/db.js";
+import { useDb, me, currentSeason } from "../lib/db.js";
 
 export default function Home() {
   const db = useDb();
@@ -27,7 +27,7 @@ export default function Home() {
           {first ? `Hi, ${first} · Season` : "Season"}
         </p>
         <h1 className="font-display text-[76px] font-extrabold italic uppercase leading-[0.9] tabular-nums">
-          {db.settings.season}
+          {currentSeason(db)}
         </h1>
         <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-xs font-bold text-soft">
           <span className="h-[7px] w-[7px] rounded-full bg-live" aria-hidden="true" />

@@ -1,0 +1,127 @@
+const mem = {}; globalThis.localStorage = { getItem:k=>mem[k]??null, setItem:(k,v)=>{mem[k]=String(v)}, removeItem:k=>{delete mem[k]} };
+const db = await import(new URL("../../src/lib/db.js", import.meta.url).href);
+let pass=0, fail=0;
+const t=(name,res,expectOk,re)=>{ const good=(res.ok===expectOk)&&(expectOk||!re||re.test(res.error)); good?pass++:fail++; console.log(good?"PASS":"FAIL", name, res.ok?"(allowed)":"("+res.error+")"); return res; };
+const is=(name,v,exp)=>{ const good=v===exp; good?pass++:fail++; console.log(good?"PASS":"FAIL", name, good?"":`got ${v}`); };
+const S=()=>db.getState();
+const ALL=["categories","entries","draws","scores"];
+await db.ensureDemoAdmin();
+await db.staffSignIn({username:"admin",password:"admin123"});
+await db.saveOrganiser({name:"Full",username:"full1",password:"OrgPass123",sport:"table-tennis",perms:ALL});
+await db.saveOrganiser({name:"Scorer",username:"scorer1",password:"OrgPass123",sport:"table-tennis",perms:["scores"]});
+const T=(t("admin creates tournament", await db.saveTournament({sport:"table-tennis",name:"Warje Olympics 2026",season:2026,ageCutoff:"2026-10-01",startsOn:"2026-11-01",endsOn:"2026-11-30"}),true)).id;
+t("end before start refused", await db.saveTournament({sport:"table-tennis",name:"X",season:2026,ageCutoff:"2026-10-01",startsOn:"2026-11-30",endsOn:"2026-11-01"}),false,/end date/);
+t("name required", await db.saveTournament({sport:"table-tennis",name:" ",season:2026,ageCutoff:"2026-10-01"}),false,/name/);
+const mk=async(name)=>(await db.saveCategory({tournamentId:T,name,gender:"M",format:"singles",minAge:18,maxAge:45,fee:0})).id;
+const cat=await mk("Groups then KO");
+is("new category has a knockout stage", db.stagesOf(S(),cat).map(s=>s.kind).join(), "knockout");
+const [s1]=db.stagesOf(S(),cat);
+t("make stage 1 two round-robin groups, top 2 advance", await db.saveStage({id:s1.id,categoryId:cat,name:"Groups",kind:"round_robin",groups:2,legs:1,advance:2}),true);
+const st2=(await db.saveStage({categoryId:cat,name:"Knockout",kind:"knockout"})).id;
+is("stages in order", db.stagesOf(S(),cat).map(s=>s.name).join(), "Groups,Knockout");
+t("0 groups refused", await db.saveStage({categoryId:cat,name:"x",kind:"round_robin",groups:0}),false,/groups/);
+t("unknown kind refused", await db.saveStage({categoryId:cat,name:"x",kind:"swiss"}),false,/format/);
+// players
+const regs=[];
+for (let i=0;i<8;i++){ await db.signUp({name:"P"+i,mobile:"98765000"+String(i).padStart(2,"0"),pin:"4321"}); await db.savePlayer({name:"P"+i,dob:"1996-05-10",gender:"M",society:"K",relation:"self"}); const pid=S().players.find(p=>p.name==="P"+i).id; t("P"+i+" enters", await db.register({playerId:pid,categoryId:cat}),true); regs.push(S().registrations.find(r=>r.playerId===pid).id); await db.signOut(); }
+await db.saveTournament({id:T,sport:"table-tennis",name:"Warje Olympics 2026",season:2026,ageCutoff:"2026-10-01",regOpen:false}).catch(()=>{});
+await db.staffSignIn({username:"admin",password:"admin123"});
+await db.saveTournament({id:T,sport:"table-tennis",name:"Warje Olympics 2026",season:2026,ageCutoff:"2026-10-01",regOpen:false});
+await db.signOut(); await db.signIn({mobile:"9876500000",pin:"4321"});
+t("closed tournament refuses entries", await db.register({playerId:S().players.find(p=>p.name==="P0").id,categoryId:cat}),false,/closed|Already/);
+await db.signOut(); await db.staffSignIn({username:"admin",password:"admin123"});
+await db.saveTournament({id:T,sport:"table-tennis",name:"Warje Olympics 2026",season:2026,ageCutoff:"2026-10-01",regOpen:true});
+await db.signOut(); await db.staffSignIn({username:"scorer1",password:"OrgPass123"});
+t("scorer cannot generate", await db.generateStage(s1.id),false,/permission/);
+t("scorer cannot edit stages", await db.saveStage({id:s1.id,categoryId:cat,name:"G",kind:"round_robin",groups:2,legs:1,advance:2}),false,/permission/);
+await db.signOut(); await db.staffSignIn({username:"full1",password:"OrgPass123"});
+t("stage 2 before stage 1", await db.generateStage(st2),false,/first/);
+t("generate groups", await db.generateStage(s1.id),true);
+const m1=db.stageMatches(S(),s1.id);
+is("12 group matches", m1.length, 12);
+is("every pair once", new Set(m1.map(m=>[m.p1RegId,m.p2RegId].sort().join("|"))).size, 12);
+is("3 rounds per group", new Set(m1.filter(m=>m.groupNo===1).map(m=>m.round)).size, 3);
+t("generating again refused", await db.generateStage(s1.id),false,/already has/);
+t("stage 2 refused while unfinished", await db.generateStage(st2),false,/Finish every match/);
+t("format change refused with matches", await db.saveStage({id:s1.id,categoryId:cat,name:"Groups",kind:"knockout"}),false,/already has matches/);
+for (const m of m1) t("score "+m.id.slice(0,4), await db.saveScore(m.id,{score1:2,score2:1}),true);
+const tab=db.standings(S(),s1.id);
+is("two group tables of 4", tab.length===2 && tab.every(g=>g.rows.length===4) ? 1:0, 1);
+is("ranks 1..4", tab.every(g=>g.rows.map(r=>r.rank).join()==="1,2,3,4")?1:0, 1);
+t("make knockout from qualifiers", await db.generateStage(st2),true);
+const sf=db.stageMatches(S(),st2);
+const qual=new Set(tab.flatMap(g=>g.rows.filter(r=>r.rank<=2).map(r=>r.regId)));
+is("2 semi-finals of qualifiers only", sf.length===2 && sf.every(m=>qual.has(m.p1RegId)&&qual.has(m.p2RegId))?1:0, 1);
+t("stage 1 result locked", await db.saveScore(m1[0].id,{score1:0,score2:2}),false,/later stage/);
+for (const m of sf) await db.saveScore(m.id,{score1:2,score2:0});
+t("final", await db.generateStage(st2),true);
+const fin=db.stageMatches(S(),st2).find(m=>m.round===2);
+is("final label", fin.roundLabel, "Final");
+t("semi locked once final exists", await db.saveScore(sf[0].id,{score1:0,score2:2}),false,/next round/);
+await db.saveScore(fin.id,{score1:2,score2:0});
+is("champion found", db.champion(S(),cat)===fin.p1RegId?1:0, 1);
+t("no more rounds", await db.generateStage(st2),false,/champion/);
+t("clear stage 1 also clears stage 2", await db.clearStage(s1.id),true);
+is("no matches left", S().matches.filter(m=>m.categoryId===cat).length, 0);
+// single group league: champion = leader
+await db.saveStage({id:s1.id,categoryId:cat,name:"League",kind:"round_robin",groups:1,legs:2,advance:2});
+await db.deleteStage(st2);
+t("double round robin of 8", await db.generateStage(s1.id),true);
+is("8 players twice = 56 matches", S().matches.filter(m=>m.stageId===s1.id).length, 56);
+is("14 rounds", new Set(S().matches.filter(m=>m.stageId===s1.id).map(m=>m.round)).size, 14);
+is("every ordered pair once", new Set(S().matches.filter(m=>m.stageId===s1.id).map(m=>m.p1RegId+">"+m.p2RegId)).size, 56);
+for (const m of S().matches.filter(m=>m.stageId===s1.id)) await db.saveScore(m.id,{score1:2,score2:0});
+is("league leader is champion", db.champion(S(),cat)===db.standings(S(),s1.id)[0].rows[0].regId?1:0, 1);
+await db.clearStage(s1.id);
+// odd knockout with byes
+const ko=await mk("KO5"); const kos=db.stagesOf(S(),ko)[0].id;
+for (let i=0;i<5;i++){ await db.signOut(); await db.signIn({mobile:"98765000"+String(i).padStart(2,"0"),pin:"4321"}); await db.register({playerId:S().players.find(p=>p.name==="P"+i).id,categoryId:ko}); }
+await db.signOut(); await db.staffSignIn({username:"full1",password:"OrgPass123"});
+t("5-player knockout", await db.generateStage(kos),true);
+const km=db.stageMatches(S(),kos);
+is("3 slots, 1 bye", km.length===3&&km.filter(m=>m.bye).length===1?1:0, 1);
+t("bye has no score", await db.saveScore(km.find(m=>m.bye).id,{score1:2,score2:0}),false,/bye/);
+t("tie refused", await db.saveScore(km.find(m=>!m.bye).id,{score1:1,score2:1}),false,/level/);
+const extra=(await db.saveStage({categoryId:ko,name:"Extra",kind:"knockout"})).id;
+for (const m of km.filter(m=>!m.bye)) await db.saveScore(m.id,{score1:2,score2:0});
+t("stage after a knockout refused", await db.generateStage(extra),false,/does not send players/);
+// too many groups
+const g3=await mk("3 in 2 groups"); const g3s=db.stagesOf(S(),g3)[0].id; await db.saveStage({id:g3s,categoryId:g3,name:"G",kind:"round_robin",groups:2,legs:1,advance:0});
+for (let i=0;i<3;i++){ await db.signOut(); await db.signIn({mobile:"98765000"+String(i).padStart(2,"0"),pin:"4321"}); await db.register({playerId:S().players.find(p=>p.name==="P"+i).id,categoryId:g3}); }
+await db.signOut(); await db.staffSignIn({username:"full1",password:"OrgPass123"});
+t("too many groups refused", await db.generateStage(g3s),false,/Too many groups/);
+// custom stage with hand-made slots
+const cu=await mk("Custom"); const cus=db.stagesOf(S(),cu)[0].id; await db.saveStage({id:cus,categoryId:cu,name:"Friendly",kind:"custom"});
+const rc=[]; for (let i=0;i<4;i++){ await db.signOut(); await db.signIn({mobile:"98765000"+String(i).padStart(2,"0"),pin:"4321"}); await db.register({playerId:S().players.find(p=>p.name==="P"+i).id,categoryId:cu}); rc.push(S().registrations.find(r=>r.categoryId===cu&&r.playerId===S().players.find(p=>p.name==="P"+i).id).id); }
+await db.signOut(); await db.staffSignIn({username:"full1",password:"OrgPass123"});
+t("custom cannot be generated", await db.generateStage(cus),false,/by hand/);
+const slot=(t("add empty slot", await db.saveMatch({stageId:cus,label:"Opening",round:1,scheduledAt:"2026-11-05T04:30:00.000Z"}),true)).id;
+t("same player twice refused", await db.saveMatch({id:slot,p1RegId:rc[0],p2RegId:rc[0],round:1}),false,/different/);
+t("player of other category refused", await db.saveMatch({id:slot,p1RegId:rc[0],p2RegId:S().registrations.find(r=>r.categoryId===ko).id,round:1}),false,/not entered/);
+t("score refused until both set", await db.saveScore(slot,{score1:2,score2:0}),false,/Both players/);
+t("fill players", await db.saveMatch({id:slot,p1RegId:rc[0],p2RegId:rc[1],label:"Opening",round:1,scheduledAt:"2026-11-05T06:00:00.000Z"}),true);
+is("time stored", S().matches.find(m=>m.id===slot).scheduledAt, "2026-11-05T06:00:00.000Z");
+await db.signOut(); await db.staffSignIn({username:"scorer1",password:"OrgPass123"});
+t("scorer sets the time", await db.setSchedule(slot,"2026-11-06T03:30:00.000Z"),true);
+t("scorer cannot change players", await db.saveMatch({id:slot,p1RegId:rc[2],p2RegId:rc[3],round:1}),false,/permission/);
+t("scorer scores", await db.saveScore(slot,{score1:0,score2:2}),true);
+t("scorer clears result", await db.clearScore(slot),true);
+await db.signOut(); await db.staffSignIn({username:"full1",password:"OrgPass123"});
+t("delete slot", await db.deleteMatch(slot),true);
+await db.saveMatch({stageId:cus,p1RegId:rc[0],p2RegId:rc[1],round:1});
+t("delete stage with matches refused", await db.deleteStage(cus),false,/has matches/);
+t("rename stage with matches fine", await db.saveStage({id:cus,categoryId:cu,name:"Friendly games",kind:"custom"}),true);
+// ordering and deletion
+const ord=await mk("Order"); const o1=db.stagesOf(S(),ord)[0].id; const o2=(await db.saveStage({categoryId:ord,name:"B",kind:"custom"})).id;
+await db.moveStage(o2,-1); is("moved up", db.stagesOf(S(),ord).map(s=>s.name).join(), "B,Knockout");
+await db.deleteStage(o2); is("deleted", db.stagesOf(S(),ord).length, 1);
+// starter + deletion
+t("starter categories", await db.addStarterCategories(T),true);
+is("every category has a stage", S().categories.every(c=>db.stagesOf(S(),c.id).length>0)?1:0, 1);
+t("category with entries not deletable", await db.deleteCategory(cat),false,/entries/);
+t("tournament with entries not deletable", await db.deleteTournament(T),false,/entries/);
+const T2=(await db.saveTournament({sport:"table-tennis",name:"Empty",season:2027,ageCutoff:"2027-10-01"})).id;
+await db.saveCategory({tournamentId:T2,name:"Tmp",gender:"M",format:"singles",minAge:1,maxAge:2,fee:0});
+t("empty tournament deleted", await db.deleteTournament(T2),true);
+is("its categories and stages gone", S().categories.some(c=>c.tournamentId===T2)||S().stages.some(s=>!S().categories.some(c=>c.id===s.categoryId))?1:0, 0);
+console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);

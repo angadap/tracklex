@@ -1,7 +1,10 @@
 -- The database schema is the numbered files in supabase/migrations/, applied in order:
 --   0001_tables.sql        tables
 --   0002_access.sql        who can READ what (row-level security); clients cannot write to tables directly
---   0003_actions.sql       every write: functions that check the caller's role and the tournament rules
 --   0004_auth_attempts.sql atomic sign-in attempt counting for the sign-in function
+--   0005_permissions.sql   organiser permission levels (perms) and permission helper functions
+--   0006_tournaments.sql   tournaments, stages, matches that belong to stages
+--   0007_actions.sql       every write: functions that check the caller's role, permission and the tournament rules
 -- The sign-in function is in supabase/functions/tlx-auth/index.ts.
--- Applied to the Tracklex project (ref xboufkrnmjyidpquipoj): 0001, 0002 and 0004 are applied; 0003 must be run in the SQL editor.
+-- Applied to the Tracklex project (ref xboufkrnmjyidpquipoj): 0001, 0002, 0004 and the columns/functions of 0005.
+-- Paste supabase/APPLY_IN_SQL_EDITOR.sql (0005 + 0006 + 0007) into the SQL editor for the rest.
