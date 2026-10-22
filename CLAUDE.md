@@ -32,7 +32,7 @@ Owner: Angad (also the organiser and sole coordinator for now).
   - **demo**: not set -> browser-only localStorage (`src/lib/local.js`, key `warje.db.v1`, demo admin `admin` / `admin123`). Used for offline tests.
   - Both expose identical async functions; rules and selectors shared by both are in `src/lib/core.js`. Screens only import `db.js`.
 - **Database:** Supabase project "Tracklex" (ref `xboufkrnmjyidpquipoj`, `https://xboufkrnmjyidpquipoj.supabase.co`, ap-south-1 Mumbai, org MathsApp). The other project, "Mathelex" (his maths app), must NEVER be touched. See section 3a.
-- **Repo:** GitHub (Angad's account). **Deploy:** Cloudflare Pages (build `npm run build`, output `dist`).
+- **Repo:** GitHub `angadap/tracklex` (private, branch main). **Deploy:** Cloudflare Pages (build `npm run build`, output `dist`).
 
 ## 3a. Backend (Supabase)
 
@@ -43,9 +43,9 @@ Migrations in `supabase/migrations/`, applied in order (`supabase/schema.sql` is
 | `0001_tables.sql` | sports, settings, profiles, players, categories, registrations, matches, app_secrets, login_attempts | applied |
 | `0002_access.sql` | helper functions (`my_role`, `is_admin`, `can_manage`, ...), `list_entries()`, RLS: clients can only READ; write grants revoked | applied |
 | `0004_auth_attempts.sql` | atomic `auth_attempt()` counter, service role only | applied |
-| `0005_permissions.sql` | `profiles.perms`, new shape check (players may carry sport + perms), `can_manage`, `has_perm`, `require_perm`, entries-read policy | columns and functions applied; the constraint and policy change (contains `drop`) **must be pasted in the SQL editor** |
-| `0006_tournaments.sql` | `tournaments`, `stages`; categories belong to a tournament; matches belong to a stage (`group_no`, `scheduled_at`, nullable player 1 for byes); public read RLS; `stage_standings()` | **NOT applied yet** |
-| `0007_actions.sql` | all write functions (SECURITY DEFINER) that check role, permission and rules: players, entries, `save_tournament`, `save_category`, `save_stage`, `generate_stage`, `save_match`, `set_schedule`, `save_score`, `clear_stage` and more. Friendly errors are shown verbatim in the app | **NOT applied yet** (tool refuses `drop`/`delete`; paste in the SQL editor) |
+| `0005_permissions.sql` | `profiles.perms`, new shape check (players may carry sport + perms), `can_manage`, `has_perm`, `require_perm`, entries-read policy | applied (2026-10-22, via SQL editor) |
+| `0006_tournaments.sql` | `tournaments`, `stages`; categories belong to a tournament; matches belong to a stage (`group_no`, `scheduled_at`, nullable player 1 for byes); public read RLS; `stage_standings()` | applied (2026-10-22) |
+| `0007_actions.sql` | all write functions (SECURITY DEFINER) that check role, permission and rules: players, entries, `save_tournament`, `save_category`, `save_stage`, `generate_stage`, `save_match`, `set_schedule`, `save_score`, `clear_stage` and more. Friendly errors are shown verbatim in the app | applied (2026-10-22, via SQL editor; the Supabase tool refuses `drop`/`delete`, so future migrations containing them must be pasted by the user) |
 
 `supabase/APPLY_IN_SQL_EDITOR.sql` = 0005 + 0006 + 0007 in one paste (safe to re-run).
 
@@ -174,8 +174,8 @@ Live sign-in function (2026-10-21, via pg_net): signup and duplicate mobile, pla
 
 ## 11. Next steps
 
-1. Paste `supabase/APPLY_IN_SQL_EDITOR.sql` (0005 + 0006 + 0007) into the Supabase SQL editor, then test every write function and permission live, test `remote.js` against the live database, run the Supabase advisors. The old `settings` table is now unused.
-2. Push to GitHub, set the two env vars on Cloudflare Pages, deploy, wipe test data
+1. Set the two env vars on Cloudflare Pages, deploy, then test the live app in a browser (`remote.js` has not run against the live database yet; the sandbox cannot reach supabase.co). The old `settings` table is now unused.
+2. Wipe test data (organisers tt_org, tt_org2, tt_scorer) from Admin, Data tools; change the admin password
 3. Badminton setup (reuse the Table Tennis screens with a sport parameter)
 4. Basic certificates (participation and winner)
 5. Records / hall of fame across seasons; medal points and society standings if wanted again
@@ -193,3 +193,4 @@ Live sign-in function (2026-10-21, via pg_net): signup and duplicate mobile, pla
 - **2026-10-21 — v0.7.0:** Live backend. Supabase tables, row-level security (read-only for clients), write functions with role and rule checks (0003, pending apply), throttled sign-in edge function `tlx-auth`, first admin created. App now has two modes (live via env vars, demo otherwise); data layer split into `core.js`, `local.js`, `remote.js`, all actions async. Added `.env.example`. Demo-mode tests: 46 permission checks and 24 browser checks green. Live end-to-end not yet verified (waiting for 0003).
 - **2026-10-21 — v0.8.0:** Organiser permission levels (categories, entries, draws, scores; presets Full organiser / Registration desk / Scorer) and "make a player an organiser" (player keeps mobile + PIN login and players, gains the console for one sport). New `0005_permissions.sql`, `0006_actions.sql` (was 0003) with `require_perm`; edge function v3 (`grant-organiser`, perms on organiser accounts). Organisers screen rebuilt; dashboard, routes and Matches page respect permissions. Removed 8 unused old files. Demo-mode tests: 46 + 36 permission checks green.
 - **2026-10-22 — v0.9.0:** Tournament structure. Sport -> Tournament -> Categories -> Stages -> Match slots. Admin and organisers with the setup permission create tournaments (season, age cutoff and entries open/closed moved here from season settings), age/gender categories, and stages from templates (knockout, round robin with groups and 1 or 2 legs and N advancing, custom) that can be edited, reordered and chained; match slots hold players, score, round name and date/time. New migrations `0006_tournaments.sql` and `0007_actions.sql` (old 0006_actions replaced; `save_settings`, `generate_round`, `clear_draw` removed). New screens Tournaments, TournamentPage, CategoryPage; removed Categories and Matches screens; public sport page has a tournament picker, stages and tables. Edge function v4 (wipe also clears tournaments). Tests: 166 data-layer rule checks, 95 PGlite database-rule checks, 16 browser checks (390px) green in demo mode; migrations 0005 (part), 0006 and 0007 NOT yet applied live.
+- **2026-10-22 — live database updated:** 0005 (rest), 0006 and 0007 applied via the SQL editor. Live rule test (impersonating admin, organiser, scorer, player and anonymous in a rolled-back transaction) all green: anon and scorer refused, other-sport refused, starter categories and stages, entries, closed entries, duplicate entry, knockout through to champion, results lock, round robin (6 matches for 4), schedule, format change refused, clear stage, delete tournament with entries refused, anon cannot read registrations. Supabase advisors: only expected warnings (write functions are SECURITY DEFINER by design and check the caller inside; leaked-password protection is irrelevant because Auth passwords are derived by the sign-in function). Code pushed to GitHub.
