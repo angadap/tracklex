@@ -62,8 +62,8 @@ Migrations in `supabase/migrations/`, applied in order (`supabase/schema.sql` is
 
 - **Website:** Cloudflare Workers Builds is connected to `angadap/tracklex`, production branch `main`, builds on. Every push to `main` builds (`npm run build`) and deploys (`npx wrangler deploy`).
 - **Tests:** `.github/workflows/ci.yml` runs the data and database tests and a build on every push and pull request.
-- **Backend:** `.github/workflows/supabase.yml` runs on pushes to `main` that touch `supabase/migrations/**` or `supabase/functions/**`. It applies new migration files with `scripts/apply_migrations.sh` (remembers what ran in `tlx_ops.applied`; files below 0009 are treated as already applied) and deploys the `tlx-auth` function. Needs two GitHub repository secrets (Settings, Secrets and variables, Actions): `SUPABASE_DB_URL` (Dashboard, Connect, Session pooler string, with the database password filled in) and `SUPABASE_ACCESS_TOKEN` (supabase.com/dashboard/account/tokens). A step is skipped when its secret is missing.
-- Migrations run on the live database as soon as they are pushed. Write them to be safe to run once, and test them in `tests/sql` first.
+- **Backend:** no Supabase account token is stored anywhere (it would reach every project in the org, including Mathelex; Angad's decision 2026-10-23). Database changes and the `tlx-auth` function are applied by Claude directly through the Supabase tool after local tests; migrations containing `drop`/`delete` are pasted by Angad in the SQL editor. Optional: `.github/workflows/supabase.yml` is a manual (Run workflow) job that applies new migration files with `scripts/apply_migrations.sh` using a `SUPABASE_DB_URL` secret held in a protected GitHub environment named `production` with a required reviewer. It does nothing without that secret.
+- Write migrations to be safe to run once, and test them in `tests/sql` first.
 
 ## 4. Design system ("Match day")
 

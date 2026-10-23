@@ -1,34 +1,21 @@
-# Deploys backend changes when they are pushed to main: new database migrations and the sign-in function.
-# The website itself is deployed by Cloudflare's own GitHub connection. Skips a step when its secret is not set.
-name: Deploy backend
+# Optional: applies new database migrations after YOU approve the run. Does nothing unless the secret SUPABASE_DB_URL exists.
+# The sign-in function and migrations are otherwise applied by Claude directly. No Supabase account token is stored anywhere.
+# Set it up: GitHub repo, Settings, Environments, New environment "production", tick Required reviewers and add yourself;
+# then add SUPABASE_DB_URL as a secret of that environment (not a repository secret).
+name: Apply database migrations
 on:
-  push:
-    branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/functions/**"
-      - "scripts/apply_migrations.sh"
-      - ".github/workflows/supabase.yml"
   workflow_dispatch:
-concurrency: deploy-backend
 jobs:
-  backend:
+  migrate:
     runs-on: ubuntu-latest
+    environment: production
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      PROJECT_REF: xboufkrnmjyidpquipoj
     steps:
       - uses: actions/checkout@v4
       - name: Apply new database migrations
         if: env.SUPABASE_DB_URL != ''
         run: ./scripts/apply_migrations.sh
-      - uses: supabase/setup-cli@v1
-        if: env.SUPABASE_ACCESS_TOKEN != ''
-        with: { version: latest }
-      - name: Deploy the sign-in function
-        if: env.SUPABASE_ACCESS_TOKEN != ''
-        run: supabase functions deploy tlx-auth --project-ref "$PROJECT_REF" --no-verify-jwt
-      - name: Note skipped steps
-        if: env.SUPABASE_DB_URL == '' || env.SUPABASE_ACCESS_TOKEN == ''
-        run: echo "A secret is missing, so some steps were skipped. See CLAUDE.md, section 3b."
+      - name: Skipped
+        if: env.SUPABASE_DB_URL == ''
+        run: echo "SUPABASE_DB_URL is not set, nothing to do."
