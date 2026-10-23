@@ -153,11 +153,11 @@ export default function Profile() {
                           const c = db.categories.find((x) => x.id === r.categoryId);
                           return (
                             <li key={r.id} className="flex items-center gap-2 text-sm">
-                              <span className="min-w-0 flex-1 truncate">
-                                {c ? categoryLabel(c) : "Category"}
-                                {r.partnerName ? ` with ${r.partnerName}` : ""}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-bold">{c ? categoryLabel(c) : "Category"}{r.partnerName ? ` with ${r.partnerName}` : ""}</span>
+                                <span className="block truncate text-[12px] text-muted">{db.tournaments.find((t) => t.id === c?.tournamentId)?.name || "Tournament"}</span>
                               </span>
-                              <Chip tone={r.paid ? "good" : "warn"}>{r.paid ? "Paid" : `Due ${formatMoney(c?.fee)}`}</Chip>
+                              <Chip tone={r.paid || !c?.fee ? "good" : "warn"}>{!c?.fee ? "Free" : r.paid ? "Paid" : `Due ${formatMoney(c.fee)}`}</Chip>
                               <button
                                 onClick={async () => { const res = await withdraw(r.id); if (!res.ok) alert(res.error); }}
                                 className="text-xs font-bold text-muted underline"
