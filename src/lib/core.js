@@ -7,17 +7,18 @@ export const SPORT = "table-tennis";
 export const ok = (extra = {}) => ({ ok: true, ...extra });
 export const fail = (error) => ({ ok: false, error });
 
-export function ageOn(dob, on) {
-  const d = new Date(dob);
-  const c = new Date(on);
-  let age = c.getFullYear() - d.getFullYear();
-  const m = c.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && c.getDate() < d.getDate())) age--;
+// Age in whole years. Always counted on today's date unless a date is given (tests). dob is "YYYY-MM-DD".
+export function ageOn(dob, on = new Date()) {
+  const [dy, dm, dd] = String(dob).slice(0, 10).split("-").map(Number);
+  const c = typeof on === "string" ? new Date(on + "T00:00:00") : on;
+  let age = c.getFullYear() - dy;
+  const m = c.getMonth() + 1 - dm;
+  if (m < 0 || (m === 0 && c.getDate() < dd)) age--;
   return age;
 }
 
-export function isEligible(player, cat, cutoff) {
-  const age = ageOn(player.dob, cutoff);
+export function isEligible(player, cat) {
+  const age = ageOn(player.dob);
   return age >= cat.minAge && age <= cat.maxAge && (cat.gender === "X" || cat.gender === player.gender);
 }
 
@@ -90,8 +91,7 @@ export const categoryFullLabel = (s, c) => {
   const label = `${c.name} · ${c.gender === "M" ? "Men" : c.gender === "F" ? "Women" : "Mixed"} ${c.format}`;
   return tournamentsOf(s, c.sport).length > 1 ? `${label} · ${tournamentById(s, c.tournamentId)?.name || ""}` : label;
 };
-export const ageFor = (s, dob, cat) => ageOn(dob, (cat && cutoffFor(s, cat)) || activeTournament(s, "table-tennis")?.ageCutoff || new Date().toISOString().slice(0, 10));
-export const cutoffFor = (s, cat) => tournamentById(s, cat.tournamentId)?.ageCutoff;
+export const ageFor = (s, dob) => ageOn(dob);   // age today
 export const stagesOf = (s, categoryId) => s.stages.filter((x) => x.categoryId === categoryId).sort((a, b) => a.seq - b.seq);
 
 export const STAGE_KINDS = [

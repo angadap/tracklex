@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 import { SPORTS } from "../data/sports.js";
 import {
   ok, fail, isEligible, me, isAdmin, isStaffAccount, canManage, can, PERMS, deriveEntries,
-  stagesOf, standings, stageIsDone, tournamentById, cutoffFor,
+  stagesOf, standings, stageIsDone, tournamentById,
 } from "./core.js";
 
 const KEY = "warje.db.v1";
@@ -197,7 +197,7 @@ function cleanPlayer(input) {
   if (!name) return { error: "Enter the player's name." };
   if (!input.dob || new Date(input.dob) > new Date()) return { error: "Enter a valid date of birth." };
   if (!["M", "F"].includes(input.gender)) return { error: "Choose male or female." };
-  return { data: { name, dob: input.dob, gender: input.gender, society: (input.society || "").trim() } };
+  return { data: { name, dob: input.dob, gender: input.gender, society: (input.society || "").trim(), tshirt: input.tshirt || "", photo: input.photo || "" } };
 }
 
 // Admin only: organisers can see players but never change their profiles.
@@ -244,7 +244,7 @@ export async function register({ playerId, categoryId, partnerName = "" }) {
   if (player.accountId !== state.session) return fail("You can only enter your own players.");
   const t = tournamentById(state, cat.tournamentId);
   if (!t?.regOpen) return fail("Entries for this tournament are closed.");
-  if (!isEligible(player, cat, t.ageCutoff)) return fail(`${player.name} is not eligible for ${cat.name}.`);
+  if (!isEligible(player, cat)) return fail(`${player.name} is not eligible for ${cat.name}.`);
   if (state.registrations.some((r) => r.playerId === playerId && r.categoryId === categoryId)) return fail("Already entered in this category.");
   if (state.matches.some((m) => m.categoryId === categoryId)) return fail("The draw for this category has started. Entries are closed.");
   if (cat.format === "doubles" && !partnerName.trim()) return fail("Enter your doubles partner's name.");
@@ -282,9 +282,8 @@ export async function saveTournament({ id, sport, name, season, ageCutoff, start
   const y = Number(season);
   if (!name) return fail("Enter a tournament name.");
   if (!Number.isInteger(y) || y < 2000 || y > 2100) return fail("Enter a valid season year.");
-  if (!ageCutoff) return fail("Choose the date ages are counted on.");
   if (startsOn && endsOn && endsOn < startsOn) return fail("The end date cannot be before the start date.");
-  const data = { sport, name, season: y, ageCutoff, startsOn: startsOn || null, endsOn: endsOn || null, regOpen: regOpen !== false };
+  const data = { sport, name, season: y, ageCutoff: ageCutoff || new Date().toISOString().slice(0, 10), startsOn: startsOn || null, endsOn: endsOn || null, regOpen: regOpen !== false };
   if (id) {
     if (!state.tournaments.some((t) => t.id === id)) return fail("Tournament not found.");
     commit({ ...state, tournaments: state.tournaments.map((t) => (t.id === id ? { ...t, ...data } : t)) });

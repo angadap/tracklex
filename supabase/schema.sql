@@ -4,6 +4,7 @@
 --   0004_auth_attempts.sql atomic sign-in attempt counting for the sign-in function
 --   0005_permissions.sql   organiser permission levels (perms) and permission helper functions
 --   0006_tournaments.sql   tournaments, stages, matches that belong to stages
+--   0008_player_extras_and_age.sql  optional T-shirt size and photo; ages counted today
 --   0007_actions.sql       every write: functions that check the caller's role, permission and the tournament rules
 -- The sign-in function is in supabase/functions/tlx-auth/index.ts.
 -- Applied to the Tracklex project (ref xboufkrnmjyidpquipoj): 0001, 0002, 0004 and the columns/functions of 0005.

@@ -8,7 +8,7 @@ create schema auth; create table auth.users (id uuid primary key default gen_ran
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
 grant usage on schema public to anon, authenticated, service_role; grant usage on schema auth to anon, authenticated, service_role;
 `);
-for (const f of ["0001_tables","0002_access","0004_auth_attempts","0005_permissions","0006_tournaments","0007_actions"]) {
+for (const f of ["0001_tables","0002_access","0004_auth_attempts","0005_permissions","0006_tournaments","0007_actions","0008_player_extras_and_age"]) {
   try { await db.exec(fs.readFileSync(M+f+".sql","utf8")); console.log("applied", f); }
   catch (e) { console.log("MIGRATION FAILED", f, e.message); process.exit(2); }
 }
@@ -186,4 +186,27 @@ check("scorer cannot read entries (payment info)", (await as(orgScorer,"select c
 check("full organiser reads entries of own sport", (await as(orgFull,"select count(*)::int c from registrations")).rows[0].c>0);
 check("badminton organiser sees no TT entries", (await as(orgBD,"select count(*)::int c from registrations")).rows[0].c===0);
 check("auth_attempt not callable by users", !(await as(admin,"select auth_attempt('k',5,15)")).ok);
+// ---- 0008: age counted today, T-shirt and photo
+{
+  const T3 = (await as(admin,"select save_tournament(null,'table-tennis','Age test',2026,'2020-01-01',null,null,true) as id")).rows[0].id;
+  const c = (await as(admin,"select save_category(null,$1,'Under 20 today','M','singles',0,20,0) as id",[T3])).rows[0].id;
+  const acc = await uid(); await su("insert into profiles (id,name,mobile,role) values ($1,'Age acc','9000000001','player')",[acc]);
+  const today = (await su("select (now() at time zone 'Asia/Kolkata')::date d"))[0].d;
+  const dobFor = (years, plusDays) => { const d = new Date(today); d.setUTCFullYear(d.getUTCFullYear()-years); d.setUTCDate(d.getUTCDate()+plusDays); return d.toISOString().slice(0,10); };
+  // exactly 21 today (birthday today): too old. 21 tomorrow-birthday => still 20 today: eligible.
+  const old = (await su("insert into players (account_id,name,dob,gender,relation) values ($1,'Turned21',$2,'M','self') returning id",[acc, dobFor(21,0)]))[0].id;
+  const young = (await su("insert into players (account_id,name,dob,gender,relation) values ($1,'Turns21Tomorrow',$2,'M','self') returning id",[acc, dobFor(21,1)]))[0].id;
+  await expectFail("age is counted today: turned 21 today is too old", acc, "select register_entry($1,$2,'')", [old, c], /not eligible/);
+  await expectOk("age is counted today: turns 21 tomorrow is still 20", acc, "select register_entry($1,$2,'')", [young, c]);
+  await expectOk("player sets T-shirt size and photo", acc, "select set_player_extras($1,'M','data:image/jpeg;base64,AAAA')", [young]);
+  check("T-shirt and photo stored", (await su("select tshirt, photo from players where id=$1",[young]))[0].tshirt==="M");
+  await expectFail("bad T-shirt size refused", acc, "select set_player_extras($1,'HUGE','')", [young], /size/);
+  await expectFail("non-image photo refused", acc, "select set_player_extras($1,'M','http://x')", [young], /photo/);
+  await expectFail("oversized photo refused", acc, "select set_player_extras($1,'M',$2)", [young, "data:image/jpeg;base64,"+"A".repeat(200100)], /photo/);
+  await expectOk("both fields can be cleared", acc, "select set_player_extras($1,'','')", [young]);
+  const other = await uid(); await su("insert into profiles (id,name,mobile,role) values ($1,'Other','9000000002','player')",[other]);
+  await expectFail("another player cannot change them", other, "select set_player_extras($1,'L','')", [young], /not found/i);
+  await expectFail("anonymous cannot change them", null, "select set_player_extras($1,'L','')", [young]);
+  await expectOk("admin can", admin, "select set_player_extras($1,'XL','')", [young]);
+}
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);

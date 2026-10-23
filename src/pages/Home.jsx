@@ -12,7 +12,7 @@ export default function Home() {
   return (
     <div className="mx-auto max-w-md">
       <div className="flex items-center justify-between px-6 pt-7">
-        <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-soft">Tracklex · Warje Olympics</p>
+        <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-soft">Tracklex - Tournaments Tracker</p>
         <Link
           to="/profile"
           aria-label="My profile"

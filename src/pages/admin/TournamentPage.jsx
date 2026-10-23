@@ -43,7 +43,7 @@ export default function TournamentPage() {
 
   return (
     <>
-      <TopBar title={t.name} back="/admin/tournaments" backLabel="Tournaments" sub={`Season ${t.season} · ages counted on ${dateText(t.ageCutoff)}`} />
+      <TopBar title={t.name} back="/admin/tournaments" backLabel="Tournaments" sub={`Season ${t.season} · ages counted on today's date`} />
       <Page>
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={t.regOpen ? "good" : "neutral"}>{t.regOpen ? "Entries open" : "Entries closed"}</Chip>

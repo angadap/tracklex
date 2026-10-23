@@ -1,0 +1,48 @@
+import json, base64
+from playwright.sync_api import sync_playwright
+seed=json.load(open("/tmp/seed.json")); ok=bad=0
+def chk(n,c):
+    global ok,bad
+    print(("PASS " if c else "FAIL ")+n); ok+=bool(c); bad+=(not c)
+B="http://localhost:4180"
+png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+open("/tmp/pic.png","wb").write(png)
+with sync_playwright() as p:
+    b=p.chromium.launch(); ctx=b.new_context(viewport={"width":390,"height":844})
+    ctx.add_init_script("(()=>{const s="+json.dumps(seed)+"; if(!localStorage.getItem('warje.db.v1')) for (const k in s) localStorage.setItem(k,s[k]);})()")
+    pg=ctx.new_page(); errs=[]
+    pg.on("console",lambda m: errs.append(m.text) if m.type=="error" else None); pg.on("pageerror",lambda e: errs.append(str(e)))
+    pg.goto(B+"/login"); pg.wait_for_timeout(300)
+    chk("title on sign-in", pg.get_by_text("Tracklex - Tournaments Tracker").count()>0)
+    chk("page title", pg.title()=="Tracklex - Tournaments Tracker")
+    pg.get_by_label("Mobile number").fill("9876500000"); pg.locator('input[type=password]').fill("4321")
+    pg.get_by_role("button",name="Sign in",exact=True).click(); pg.wait_for_timeout(500)
+    chk("title on home", pg.get_by_text("Tracklex - Tournaments Tracker").count()>0 and pg.get_by_text("Warje Olympics",exact=False).count()==0)
+    pg.goto(B+"/sport/table-tennis"); pg.wait_for_timeout(300)
+    chk("sport page lists tournaments first", pg.get_by_text("Tournaments",exact=True).count()>0 and pg.get_by_text("Warje Olympics 2026").count()>0)
+    chk("categories not shown at tournament list level", pg.get_by_text("Categories and fees").count()==0)
+    pg.screenshot(path="/tmp/p_list.png")
+    pg.get_by_text("Warje Olympics 2026").click(); pg.wait_for_timeout(300)
+    chk("inside tournament: categories shown", pg.get_by_text("Categories and fees").count()>0 and pg.get_by_text("Open · Men singles").count()>0)
+    pg.screenshot(path="/tmp/p_detail.png")
+    pg.locator("a.flex-1",has_text="Register").click(); pg.wait_for_timeout(300)
+    chk("register opens for that tournament", "t=" in pg.url)
+    pg.goto(B+"/profile"); pg.wait_for_timeout(300)
+    pg.get_by_role("button",name="Add player").click(); sh=pg.get_by_role("dialog")
+    sh.get_by_label("Full name").fill("Kid One"); sh.get_by_label("Date of birth").fill("2015-03-04"); sh.get_by_label("Gender").select_option("M")
+    chk("T-shirt field present and optional", sh.get_by_label("T-shirt size").count()==1 and sh.get_by_label("T-shirt size").get_attribute("required") is None)
+    sh.get_by_label("T-shirt size").select_option("Kids M")
+    sh.get_by_label("Choose a photo").set_input_files("/tmp/pic.png"); pg.wait_for_timeout(400)
+    chk("photo preview appears", sh.locator("img").count()==1)
+    pg.screenshot(path="/tmp/p_form.png")
+    sh.get_by_role("button",name="Save player").click(); pg.wait_for_timeout(400)
+    chk("player saved with T-shirt shown", pg.get_by_text("T-shirt Kids M").count()>0)
+    chk("photo shown on profile", pg.locator("img").count()>=1)
+    pg.get_by_role("button",name="Add player").click(); sh=pg.get_by_role("dialog")
+    sh.get_by_label("Full name").fill("No Extras"); sh.get_by_label("Date of birth").fill("1990-01-01"); sh.get_by_label("Gender").select_option("F")
+    sh.get_by_role("button",name="Save player").click(); pg.wait_for_timeout(400)
+    chk("player without T-shirt or photo saves", pg.get_by_text("No Extras").count()>0)
+    chk("no console errors", len(errs)==0)
+    if errs: print(errs[:3])
+    b.close()
+print(f"\n{ok} passed, {bad} failed")

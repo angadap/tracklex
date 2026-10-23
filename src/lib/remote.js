@@ -85,7 +85,7 @@ const mapMatch = (r) => ({
   p1RegId: r.p1_reg_id, p2RegId: r.p2_reg_id, score1: r.score1, score2: r.score2,
   winnerRegId: r.winner_reg_id, status: r.status, bye: r.bye, note: r.note,
 });
-const mapPlayer = (r) => ({ id: r.id, accountId: r.account_id, name: r.name, dob: r.dob, gender: r.gender, society: r.society, relation: r.relation });
+const mapPlayer = (r) => ({ id: r.id, accountId: r.account_id, name: r.name, dob: r.dob, gender: r.gender, society: r.society, relation: r.relation, tshirt: r.tshirt || "", photo: r.photo || "" });
 const mapReg = (r) => ({ id: r.id, playerId: r.player_id, categoryId: r.category_id, partnerName: r.partner_name, paid: r.paid, paidAt: r.paid_at, createdAt: r.created_at });
 const mapAccount = (r) => ({ id: r.id, name: r.name, mobile: r.mobile, username: r.username, sport: r.sport, role: r.role, perms: r.perms || [] });
 
@@ -271,8 +271,12 @@ export async function resetAllData() {
 export const ensureDemoAdmin = async () => {};
 
 // ---------- players ----------
-export const savePlayer = (p) =>
-  rpc("save_player", { p_id: p.id || null, p_name: p.name, p_dob: p.dob || null, p_gender: p.gender, p_society: p.society || "", p_relation: p.relation });
+export async function savePlayer(p) {
+  const res = await rpc("save_player", { p_id: p.id || null, p_name: p.name, p_dob: p.dob || null, p_gender: p.gender, p_society: p.society || "", p_relation: p.relation });
+  if (!res.ok) return res;
+  // T-shirt size and photo are optional extras saved right after the player.
+  return rpc("set_player_extras", { p_id: p.id || res.data, p_tshirt: p.tshirt || "", p_photo: p.photo || "" });
+}
 export const removePlayer = (id) => rpc("remove_player", { p_id: id });
 export const adminSavePlayer = (id, p) =>
   rpc("admin_save_player", { p_id: id, p_name: p.name, p_dob: p.dob || null, p_gender: p.gender, p_society: p.society || "" });
@@ -291,7 +295,7 @@ export async function saveTournament({ id, sport, name, season, ageCutoff, start
   const y = Number(season);
   if (!Number.isInteger(y)) return fail("Enter a valid season year.");
   return withId(await rpc("save_tournament", {
-    p_id: id || null, p_sport: sport, p_name: name || "", p_season: y, p_age_cutoff: ageCutoff || null,
+    p_id: id || null, p_sport: sport, p_name: name || "", p_season: y, p_age_cutoff: ageCutoff || new Date().toISOString().slice(0, 10),
     p_starts_on: startsOn || null, p_ends_on: endsOn || null, p_reg_open: regOpen !== false,
   }));
 }

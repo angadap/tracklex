@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDb, isAdmin, adminSavePlayer, adminRemovePlayer, sportCategories, categoryFullLabel, ageFor, formatMoney, setPaid, withdraw, resetPin } from "../../lib/db.js";
+import { Avatar } from "../../components/PlayerPhoto.jsx";
 import { TopBar, Page, Segmented, Card, Chip, Empty, Btn, Sheet, Field, ErrorText, inputCls } from "../../components/ui.jsx";
 
 export default function Players() {
@@ -61,9 +62,10 @@ export default function Players() {
                   <li key={r.id}>
                     <Card>
                       <div className="flex items-start gap-3">
+                        <Avatar name={p.name} photo={p.photo} size={44} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-bold">{p.name}{r.partnerName ? ` & ${r.partnerName}` : ""}</p>
-                          <p className="mt-0.5 text-[13px] text-soft">{categoryFullLabel(db, c)} · age {ageFor(db, p.dob, c)}{p.society ? ` · ${p.society}` : ""}</p>
+                          <p className="mt-0.5 text-[13px] text-soft">{categoryFullLabel(db, c)} · age {ageFor(db, p.dob)}{p.society ? ` · ${p.society}` : ""}{p.tshirt ? ` · T-shirt ${p.tshirt}` : ""}</p>
                         </div>
                         <Chip tone={r.paid ? "good" : "warn"}>{r.paid ? "Paid" : "Unpaid"}</Chip>
                       </div>

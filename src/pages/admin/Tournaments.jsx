@@ -20,12 +20,7 @@ export function TournamentForm({ db, form, setForm, onDone, sport }) {
   return (
     <form onSubmit={save} className="space-y-4">
       <Field label="Tournament name"><input className={inputCls} value={form.name} onChange={change("name")} placeholder="For example, Warje Olympics 2026" required /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Season year"><input className={inputCls} inputMode="numeric" value={form.season} onChange={change("season")} required /></Field>
-        <Field label="Count ages on" hint="Age on this date picks the category.">
-          <input className={inputCls} type="date" value={form.ageCutoff} onChange={change("ageCutoff")} required />
-        </Field>
-      </div>
+      <Field label="Season year" hint="Ages are counted on today's date."><input className={inputCls} inputMode="numeric" value={form.season} onChange={change("season")} required /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Starts"><input className={inputCls} type="date" value={form.startsOn || ""} onChange={change("startsOn")} /></Field>
         <Field label="Ends"><input className={inputCls} type="date" value={form.endsOn || ""} onChange={change("endsOn")} /></Field>

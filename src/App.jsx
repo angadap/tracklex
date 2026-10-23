@@ -58,6 +58,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/sport/table-tennis/register" element={<Register />} />
           <Route path="/sport/:slug" element={<SportPage />} />
+          <Route path="/sport/:slug/t/:tid" element={<SportPage />} />
           <Route path="/register" element={<Navigate to="/sport/table-tennis/register" replace />} />
           <Route path="/login" element={<Auth initialMode="login" />} />
           <Route path="/signup" element={<Auth initialMode="register" />} />

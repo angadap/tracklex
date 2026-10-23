@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { Check } from "lucide-react";
-import { useDb, me, isStaffAccount, myPlayers, activeTournament, categoriesIn, isEligible, categoryLabel, formatMoney, register, ageOn } from "../lib/db.js";
+import { useDb, me, isStaffAccount, myPlayers, tournamentsOf, activeTournament, categoriesIn, isEligible, categoryLabel, formatMoney, register, ageOn } from "../lib/db.js";
 import { TopBar, Page, Btn, Card, Empty, Chip, ErrorText, inputCls } from "../components/ui.jsx";
 
 export default function Register() {
@@ -9,13 +9,14 @@ export default function Register() {
   const loc = useLocation();
   const account = me(db);
   const players = myPlayers(db);
+  const [params, setParams] = useSearchParams();
   const [playerId, setPlayerId] = useState(loc.state?.playerId || "");
   const [picked, setPicked] = useState({}); // categoryId -> partnerName
   const [error, setError] = useState("");
   const [done, setDone] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const back = "/sport/table-tennis";
+  const back = params.get("t") ? `/sport/table-tennis/t/${params.get("t")}` : "/sport/table-tennis";
   if (!account) {
     return (
       <>
@@ -57,9 +58,10 @@ export default function Register() {
   }
 
   const player = players.find((p) => p.id === playerId);
-  const tour = activeTournament(db, "table-tennis");
+  const tournaments = tournamentsOf(db, "table-tennis");
+  const tour = tournaments.find((t) => t.id === params.get("t")) || activeTournament(db, "table-tennis");
   const all = tour ? categoriesIn(db, tour.id) : [];
-  const eligible = player && tour ? all.filter((c) => isEligible(player, c, tour.ageCutoff)) : [];
+  const eligible = player && tour ? all.filter((c) => isEligible(player, c)) : [];
   const entered = new Set(db.registrations.filter((r) => r.playerId === playerId).map((r) => r.categoryId));
   const locked = (c) => db.matches.some((m) => m.categoryId === c.id);
   const total = Object.keys(picked).reduce((s, id) => s + (all.find((c) => c.id === id)?.fee || 0), 0);
@@ -112,6 +114,14 @@ export default function Register() {
     <>
       <TopBar title="Register" back={back} backLabel="Table Tennis" sub={tour ? tour.name : "Table Tennis"} />
       <Page>
+        {tournaments.length > 1 && (
+          <>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted">Tournament</p>
+            <select className={`${inputCls} mb-6`} value={tour?.id || ""} onChange={(e) => { setParams({ t: e.target.value }, { replace: true }); setPicked({}); setError(""); }} aria-label="Tournament">
+              {tournaments.map((t) => <option key={t.id} value={t.id}>{t.name}{t.regOpen ? "" : " (closed)"}</option>)}
+            </select>
+          </>
+        )}
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted">Who is playing?</p>
         <div className="flex flex-wrap gap-2">
           {players.map((p) => (
@@ -128,7 +138,7 @@ export default function Register() {
         {player && (
           <>
             <p className="mb-2 mt-6 text-xs font-bold uppercase tracking-[0.14em] text-muted">
-              Events for {player.name} · age {ageOn(player.dob, tour?.ageCutoff || new Date().toISOString().slice(0, 10))}
+              Events for {player.name} · age {ageOn(player.dob)}
             </p>
             {all.length === 0 ? (
               <Empty title="No categories yet">The organiser has not set up Table Tennis categories.</Empty>

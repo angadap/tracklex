@@ -38,7 +38,7 @@ export default function Auth({ initialMode = "login" }) {
 
   return (
     <div className="mx-auto max-w-md px-6 pb-12 pt-10">
-      <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-soft">Tracklex · Warje Olympics {currentSeason(db)}</p>
+      <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-soft">Tracklex - Tournaments Tracker</p>
       <h1 className="mt-2 font-display text-[64px] font-extrabold italic uppercase leading-[0.9]">{copy[key][0]}</h1>
       <p className="mt-3 text-sm leading-relaxed text-soft">{copy[key][1]}</p>
 

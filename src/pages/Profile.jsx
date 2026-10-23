@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Pencil, Plus, ShieldCheck, LogOut } from "lucide-react";
 import { useDb, me, isAdmin, isStaff, isStaffAccount, grantOf, presetName, sportName, myPlayers, ageOn, ageFor, savePlayer, removePlayer, withdraw, signOut, categoryLabel, formatMoney } from "../lib/db.js";
+import { Avatar, PhotoPicker, TSHIRT_SIZES } from "../components/PlayerPhoto.jsx";
 import { TopBar, Page, Btn, Card, Chip, Empty, SectionTitle, Sheet, Field, ErrorText, inputCls } from "../components/ui.jsx";
 
-const blank = { name: "", dob: "", gender: "", society: "", relation: "self" };
+const blank = { name: "", dob: "", gender: "", society: "", relation: "self", tshirt: "", photo: "" };
 
 export default function Profile() {
   const db = useDb();
@@ -129,11 +130,13 @@ export default function Profile() {
                 <li key={p.id}>
                   <Card>
                     <div className="flex items-start gap-3">
+                      <Avatar name={p.name} photo={p.photo} size={44} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-bold">{p.name}</p>
                         <p className="mt-0.5 text-[13px] text-soft">
                           {p.relation === "child" ? "Child" : "Me"} · {p.gender === "M" ? "Male" : "Female"} · Age {ageFor(db, p.dob)}
                           {p.society ? ` · ${p.society}` : ""}
+                          {p.tshirt ? ` · T-shirt ${p.tshirt}` : ""}
                         </p>
                       </div>
                       <button
@@ -207,6 +210,17 @@ export default function Profile() {
               <input className={inputCls} list="societies" value={form.society} onChange={change("society")} placeholder="Name of your society" />
               <datalist id="societies">{societies.map((s) => <option key={s} value={s} />)}</datalist>
             </Field>
+            <Field label="T-shirt size" hint="Optional">
+              <select className={inputCls} value={form.tshirt || ""} onChange={change("tshirt")}>
+                <option value="">Not sure yet</option>
+                {TSHIRT_SIZES.map((z) => <option key={z} value={z}>{z}</option>)}
+              </select>
+            </Field>
+            <div>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.12em] text-muted">Photo</span>
+              <PhotoPicker value={form.photo || ""} name={form.name} onChange={(photo) => setForm({ ...form, photo })} />
+              <span className="mt-1.5 block text-xs text-muted">Optional. Take one now or pick one from your phone.</span>
+            </div>
             <ErrorText>{error}</ErrorText>
             <Btn type="submit" className="w-full">Save player</Btn>
             {form.id && (

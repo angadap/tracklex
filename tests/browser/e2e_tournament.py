@@ -6,7 +6,7 @@ ok=bad=0
 def chk(n,c):
     global ok,bad
     print(("PASS " if c else "FAIL ")+n); ok+=bool(c); bad+=(not c)
-B="http://localhost:4173"
+B="http://localhost:4180"
 with sync_playwright() as p:
     b=p.chromium.launch(); ctx=b.new_context(viewport={"width":390,"height":844})
     ctx.add_init_script("(()=>{const s="+json.dumps(seed)+"; if(!localStorage.getItem('warje.db.v1')) for (const k in s) localStorage.setItem(k,s[k]);})()")
@@ -63,9 +63,10 @@ with sync_playwright() as p:
     pg.screenshot(path=S+"/n_knockout.png",full_page=True)
     # public view
     pg.goto(B+"/sport/table-tennis"); pg.wait_for_timeout(300)
-    pg.locator("select[aria-label=Tournament]").select_option(label="Warje Olympics 2026"); pg.wait_for_timeout(200)
+    chk("public page lists both tournaments", pg.get_by_text("Warje Olympics 2026").count()>0 and pg.get_by_text("Monsoon Cup").count()>0)
+    pg.get_by_text("Warje Olympics 2026").click(); pg.wait_for_timeout(300)
     chk("public page shows stage names and tables", pg.get_by_text("Group stage").count()>0 and pg.get_by_text("Group A").count()>0)
-    chk("public page has tournament picker", pg.locator("select[aria-label=Tournament]").count()==1)
+    chk("tournament page links back to all tournaments", pg.get_by_text("All tournaments").count()==1)
     pg.screenshot(path=S+"/n_public.png",full_page=True)
     # clear stage 1 warns and clears later stages
     pg.goto(B+"/admin/tournaments"); pg.get_by_text("Warje Olympics 2026").first.click(); pg.get_by_text("Open · Men singles").click(); pg.wait_for_timeout(300)
