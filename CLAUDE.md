@@ -58,6 +58,13 @@ Migrations in `supabase/migrations/`, applied in order (`supabase/schema.sql` is
 - **First admin:** created once by `bootstrap-admin` (username `angad`). Temporary password was given to Angad in chat; change it under Change password at first sign-in.
 - **Testing notes:** this sandbox cannot reach supabase.co, so server tests ran through `execute_sql` using `pg_net` (`net.http_post`). Responses expire after ~6 h, tokens last 1 h, requests only fire after the transaction commits. Test data (player Rahul 9876543210, organisers `tt_org`, `tt_org2`, `tt_scorer`) must be wiped with Settings, "Wipe test data" before real use.
 
+## 3b. Automatic deployment
+
+- **Website:** Cloudflare Workers Builds is connected to `angadap/tracklex`, production branch `main`, builds on. Every push to `main` builds (`npm run build`) and deploys (`npx wrangler deploy`).
+- **Tests:** `.github/workflows/ci.yml` runs the data and database tests and a build on every push and pull request.
+- **Backend:** `.github/workflows/supabase.yml` runs on pushes to `main` that touch `supabase/migrations/**` or `supabase/functions/**`. It applies new migration files with `scripts/apply_migrations.sh` (remembers what ran in `tlx_ops.applied`; files below 0009 are treated as already applied) and deploys the `tlx-auth` function. Needs two GitHub repository secrets (Settings, Secrets and variables, Actions): `SUPABASE_DB_URL` (Dashboard, Connect, Session pooler string, with the database password filled in) and `SUPABASE_ACCESS_TOKEN` (supabase.com/dashboard/account/tokens). A step is skipped when its secret is missing.
+- Migrations run on the live database as soon as they are pushed. Write them to be safe to run once, and test them in `tests/sql` first.
+
 ## 4. Design system ("Match day")
 
 Dark, immersive pro-sports-app look, chosen by Angad from three mockups. History: dark navy/gold felt childish, light/white felt like a book. Do not go back to either.

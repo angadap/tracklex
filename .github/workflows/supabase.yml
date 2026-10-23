@@ -1,0 +1,34 @@
+# Deploys backend changes when they are pushed to main: new database migrations and the sign-in function.
+# The website itself is deployed by Cloudflare's own GitHub connection. Skips a step when its secret is not set.
+name: Deploy backend
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "scripts/apply_migrations.sh"
+      - ".github/workflows/supabase.yml"
+  workflow_dispatch:
+concurrency: deploy-backend
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PROJECT_REF: xboufkrnmjyidpquipoj
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply new database migrations
+        if: env.SUPABASE_DB_URL != ''
+        run: ./scripts/apply_migrations.sh
+      - uses: supabase/setup-cli@v1
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        with: { version: latest }
+      - name: Deploy the sign-in function
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: supabase functions deploy tlx-auth --project-ref "$PROJECT_REF" --no-verify-jwt
+      - name: Note skipped steps
+        if: env.SUPABASE_DB_URL == '' || env.SUPABASE_ACCESS_TOKEN == ''
+        run: echo "A secret is missing, so some steps were skipped. See CLAUDE.md, section 3b."

@@ -1,0 +1,15 @@
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: for f in tests/data/*.mjs tests/sql/sql_test.mjs; do node "$f" | tail -1; node "$f" > /dev/null; done
+      - run: npm run build
