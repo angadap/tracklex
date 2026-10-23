@@ -6,7 +6,7 @@ ok=bad=0
 def chk(n,c):
     global ok,bad
     print(("PASS " if c else "FAIL ")+n); ok+=bool(c); bad+=(not c)
-B="http://localhost:4180"
+B="http://localhost:4181"
 with sync_playwright() as p:
     b=p.chromium.launch(); ctx=b.new_context(viewport={"width":390,"height":844})
     ctx.add_init_script("(()=>{const s="+json.dumps(seed)+"; if(!localStorage.getItem('warje.db.v1')) for (const k in s) localStorage.setItem(k,s[k]);})()")

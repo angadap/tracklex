@@ -4,7 +4,7 @@ seed=json.load(open("/tmp/seed.json")); ok=bad=0
 def chk(n,c):
     global ok,bad
     print(("PASS " if c else "FAIL ")+n); ok+=bool(c); bad+=(not c)
-B="http://localhost:4180"
+B="http://localhost:4181"
 png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 open("/tmp/pic.png","wb").write(png)
 with sync_playwright() as p:
